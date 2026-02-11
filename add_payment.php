@@ -3,6 +3,26 @@ require_once 'includes/functions.php';
 require_once 'config/database.php';
 requireLogin();
 
+function hasColumn(PDO $pdo, $table, $column) {
+    static $cache = [];
+    $key = $table . '.' . $column;
+
+    if (isset($cache[$key])) {
+        return $cache[$key];
+    }
+
+    $sql = "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$table, $column]);
+    $cache[$key] = (int) $stmt->fetchColumn() > 0;
+
+    return $cache[$key];
+}
+
+$has_payment_month = hasColumn($pdo, 'payments', 'payment_month');
+$has_start_date = hasColumn($pdo, 'students', 'start_date');
+$has_duration_months = hasColumn($pdo, 'students', 'duration_months');
+
 $student_id = $_GET['student_id'] ?? 0;
 
 // Récupérer les informations de l'étudiant
@@ -17,12 +37,15 @@ if (!$student) {
 }
 
 // Récupérer les mois déjà payés
-$sql_paid_months = "SELECT payment_month FROM payments 
-                    WHERE student_id = ? AND payment_month IS NOT NULL 
-                    ORDER BY payment_month";
-$stmt_months = $pdo->prepare($sql_paid_months);
-$stmt_months->execute([$student_id]);
-$paid_months = $stmt_months->fetchAll(PDO::FETCH_COLUMN);
+$paid_months = [];
+if ($has_payment_month) {
+    $sql_paid_months = "SELECT payment_month FROM payments 
+                        WHERE student_id = ? AND payment_month IS NOT NULL 
+                        ORDER BY payment_month";
+    $stmt_months = $pdo->prepare($sql_paid_months);
+    $stmt_months->execute([$student_id]);
+    $paid_months = $stmt_months->fetchAll(PDO::FETCH_COLUMN);
+}
 
 // Fonction pour obtenir le nom du mois en français
 function getFrenchMonthName($date) {
@@ -62,9 +85,9 @@ $next_next_month = (clone $current_date)->modify('+2 month')->format('Y-m-01');
 $months_to_pay[] = $next_next_month;
 
 // Si l'étudiant a une date de début et une durée, ajouter ces mois aussi
-if ($student['start_date']) {
+if ($has_start_date && !empty($student['start_date'])) {
     $start_date = new DateTime($student['start_date']);
-    $duration = $student['duration_months'] ?? 3;
+    $duration = $has_duration_months && !empty($student['duration_months']) ? (int) $student['duration_months'] : 3;
     
     for ($i = 0; $i < $duration; $i++) {
         $month = (clone $start_date)->modify("+$i months")->format('Y-m-01');
@@ -97,7 +120,7 @@ function getNextMonthToPay($student_id, $pdo, $paid_months, $months_to_pay) {
 $suggested_month = getNextMonthToPay($student_id, $pdo, $paid_months, $months_to_pay);
 
 // Récupérer l'historique des paiements pour calculer les échéances
-$sql_history = "SELECT payment_date, amount, payment_month FROM payments WHERE student_id = ? ORDER BY payment_date DESC";
+$sql_history = "SELECT payment_date, amount" . ($has_payment_month ? ", payment_month" : "") . " FROM payments WHERE student_id = ? ORDER BY payment_date DESC";
 $stmt_history = $pdo->prepare($sql_history);
 $stmt_history->execute([$student_id]);
 $payment_history = $stmt_history->fetchAll(PDO::FETCH_ASSOC);
@@ -106,7 +129,7 @@ $payment_history = $stmt_history->fetchAll(PDO::FETCH_ASSOC);
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_payment'])) {
     $amount = $_POST['amount'];
     $payment_date = $_POST['payment_date'];
-    $payment_month = $_POST['payment_month'];
+    $payment_month = $has_payment_month ? ($_POST['payment_month'] ?? null) : null;
     $payment_method = $_POST['payment_method'];
     $notes = $_POST['notes'];
     $receipt_number = generateReceiptNumber();
@@ -116,11 +139,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_payment'])) {
     
     try {
         // Insérer le paiement
-        $sql_payment = "INSERT INTO payments 
-                        (student_id, amount, payment_date, payment_month, payment_method, receipt_number, notes) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?)";
+        if ($has_payment_month) {
+            $sql_payment = "INSERT INTO payments 
+                            (student_id, amount, payment_date, payment_month, payment_method, receipt_number, notes) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?)";
+            $insert_params = [$student_id, $amount, $payment_date, $payment_month, $payment_method, $receipt_number, $notes];
+        } else {
+            $sql_payment = "INSERT INTO payments 
+                            (student_id, amount, payment_date, payment_method, receipt_number, notes) 
+                            VALUES (?, ?, ?, ?, ?, ?)";
+            $insert_params = [$student_id, $amount, $payment_date, $payment_method, $receipt_number, $notes];
+        }
         $stmt = $pdo->prepare($sql_payment);
-        $stmt->execute([$student_id, $amount, $payment_date, $payment_month, $payment_method, $receipt_number, $notes]);
+        $stmt->execute($insert_params);
         
         // Mettre à jour le montant payé de l'étudiant
         $sql_update = "UPDATE students 
@@ -133,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_payment'])) {
         $pdo->commit();
         
         // Formater le mois en français pour le message
-        $month_fr = getFrenchMonthName($payment_month) . ' ' . date('Y', strtotime($payment_month));
+        $month_fr = $payment_month ? (getFrenchMonthName($payment_month) . ' ' . date('Y', strtotime($payment_month))) : 'non spécifié';
         
         // Redirection avec message de succès
         $_SESSION['success_message'] = "Paiement de " . formatAmount($amount) . " pour le mois de " . $month_fr . " enregistré avec succès!";
@@ -157,13 +188,16 @@ $percentage_remaining = 100 - $percentage_paid;
 $suggested_amount = round($balance / 3, 0); // Arrondi à l'entier pour FCFA
 
 // Récupérer les paiements mensuels pour l'historique
-$sql_monthly = "SELECT payment_month, amount, payment_date, payment_method 
-                FROM payments 
-                WHERE student_id = ? AND payment_month IS NOT NULL 
-                ORDER BY payment_month DESC";
-$stmt_monthly = $pdo->prepare($sql_monthly);
-$stmt_monthly->execute([$student_id]);
-$monthly_payments = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
+$monthly_payments = [];
+if ($has_payment_month) {
+    $sql_monthly = "SELECT payment_month, amount, payment_date, payment_method 
+                    FROM payments 
+                    WHERE student_id = ? AND payment_month IS NOT NULL 
+                    ORDER BY payment_month DESC";
+    $stmt_monthly = $pdo->prepare($sql_monthly);
+    $stmt_monthly->execute([$student_id]);
+    $monthly_payments = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -937,7 +971,7 @@ $monthly_payments = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
                             <i class="fas fa-phone"></i>
                             <?php echo htmlspecialchars($student['phone'] ?: 'Non renseigné'); ?>
                         </p>
-                        <?php if ($student['start_date']): ?>
+                        <?php if ($has_start_date && !empty($student['start_date'])): ?>
                         <p>
                             <i class="fas fa-calendar-alt"></i>
                             Début formation: <?php echo date('d/m/Y', strtotime($student['start_date'])); ?>
@@ -995,6 +1029,7 @@ $monthly_payments = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
             </div>
 
             <!-- Historique des mois payés -->
+            <?php if ($has_payment_month): ?>
             <div class="payment-months-summary">
                 <h4 style="margin-bottom: 15px; color: var(--dark);">
                     <i class="fas fa-calendar-alt"></i> Historique des mois payés
@@ -1026,6 +1061,7 @@ $monthly_payments = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
                 </div>
                 <?php endif; ?>
             </div>
+            <?php endif; ?>
         </div>
 
         <!-- Payment Form -->
@@ -1040,10 +1076,10 @@ $monthly_payments = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
                     <!-- Left Column -->
                     <div>
                         <!-- Month Selection -->
+                        <?php if ($has_payment_month): ?>
                         <div class="form-group">
                             <label class="form-label">Mois à payer</label>
-                            <select name="payment_month" id="paymentMonth" class="form-control" required
-                                onchange="updateReceiptPreview()">
+                            <select name="payment_month" id="paymentMonth" class="form-control" required onchange="updateReceiptPreview()">
                                 <option value="">Sélectionner le mois</option>
 
                                 <?php
@@ -1093,6 +1129,9 @@ $monthly_payments = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
                                 ⭐ Le mois suggéré est le premier mois non payé
                             </span>
                         </div>
+                        <?php else: ?>
+                        <input type="hidden" name="payment_month" id="paymentMonth" value="">
+                        <?php endif; ?>
 
                         <!-- Amount -->
                         <div class="form-group">
@@ -1345,7 +1384,10 @@ $monthly_payments = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
         const balance = <?php echo $balance; ?>;
         const remaining = balance - amount;
 
-        document.getElementById('remainingBalance').textContent = formatCurrency(Math.max(0, remaining));
+        const remainingBalanceEl = document.getElementById('remainingBalance');
+        if (remainingBalanceEl) {
+            remainingBalanceEl.textContent = formatCurrency(Math.max(0, remaining));
+        }
 
         // Update quick buttons active state
         document.querySelectorAll('.quick-amount-btn').forEach(btn => {
@@ -1357,7 +1399,8 @@ $monthly_payments = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
     function updateReceiptPreview() {
         const amount = parseInt(document.getElementById('amountInput').value) || 0;
         const date = document.getElementById('paymentDate').value;
-        const month = document.getElementById('paymentMonth').value;
+        const monthEl = document.getElementById('paymentMonth');
+        const month = monthEl ? monthEl.value : '';
         const method = document.getElementById('paymentMethod').value;
         const receiptNumber = document.getElementById('receiptNumber').value;
         const notes = document.getElementById('notes').value;
@@ -1370,7 +1413,7 @@ $monthly_payments = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
         document.getElementById('previewReceiptNumber').textContent = 'Reçu #' + receiptNumber;
 
         // Show preview if amount > 0 and month selected
-        if (amount > 0 && month) {
+        if (amount > 0 && (!monthEl || month)) {
             document.getElementById('receiptPreview').classList.add('active');
         } else {
             document.getElementById('receiptPreview').classList.remove('active');
@@ -1389,9 +1432,10 @@ $monthly_payments = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
     document.getElementById('paymentForm').addEventListener('submit', function(e) {
         const amount = parseInt(document.getElementById('amountInput').value) || 0;
         const balance = <?php echo $balance; ?>;
-        const month = document.getElementById('paymentMonth').value;
+        const monthEl = document.getElementById('paymentMonth');
+        const month = monthEl ? monthEl.value : '';
 
-        if (!month) {
+        if (monthEl && monthEl.required && !month) {
             e.preventDefault();
             alert('Veuillez sélectionner un mois.');
             return;
@@ -1409,9 +1453,8 @@ $monthly_payments = $stmt_monthly->fetchAll(PDO::FETCH_ASSOC);
             return;
         }
 
-        const monthName = formatMonth(month);
-        if (!confirm('Confirmez-vous l\'enregistrement de ce paiement de ' + formatCurrency(amount) +
-                ' pour le mois de ' + monthName + ' ?')) {
+        const monthText = month ? (' pour le mois de ' + formatMonth(month)) : '';
+        if (!confirm('Confirmez-vous l\'enregistrement de ce paiement de ' + formatCurrency(amount) + monthText + ' ?')) {
             e.preventDefault();
         }
     });
