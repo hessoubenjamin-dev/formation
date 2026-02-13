@@ -57,6 +57,8 @@ $search = $_GET['search'] ?? '';
 $status = $_GET['status'] ?? '';
 $formation = $_GET['formation'] ?? '';
 $sort = $_GET['sort'] ?? 'newest';
+$page = max(1, (int) ($_GET['page'] ?? 1));
+$per_page = 10;
 
 // Construire la requête avec filtres
 $where = "WHERE 1=1";
@@ -105,6 +107,15 @@ switch ($sort) {
         $order_by .= "registration_date DESC";
 }
 
+// Nombre total d'étudiants (pour la pagination)
+$count_sql = "SELECT COUNT(*) FROM students $where";
+$count_stmt = $pdo->prepare($count_sql);
+$count_stmt->execute($params);
+$total_students = (int) $count_stmt->fetchColumn();
+$total_pages = max(1, (int) ceil($total_students / $per_page));
+$page = min($page, $total_pages);
+$offset = ($page - 1) * $per_page;
+
 // Récupérer les étudiants avec leur dernier mois payé
 $sql = "SELECT s.*, 
                (s.total_amount - s.paid_amount) as balance,
@@ -113,10 +124,15 @@ $sql = "SELECT s.*,
         LEFT JOIN payments p ON s.id = p.student_id
         $where 
         GROUP BY s.id
-        $order_by";
+        $order_by
+        LIMIT $per_page OFFSET $offset";
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$pagination_params = $_GET;
+unset($pagination_params['page'], $pagination_params['success']);
+$pagination_base_query = http_build_query($pagination_params);
 
 // Récupérer les types de formation uniques pour le filtre
 $formation_sql = "SELECT DISTINCT formation_type FROM students WHERE formation_type IS NOT NULL AND formation_type != '' ORDER BY formation_type";
@@ -706,6 +722,61 @@ $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
         transform: translateY(-2px);
     }
 
+
+
+    /* Pagination */
+    .pagination-wrapper {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 20px;
+    }
+
+    .pagination-info {
+        font-size: 14px;
+        color: var(--gray);
+    }
+
+    .pagination {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .pagination-link {
+        min-width: 36px;
+        height: 36px;
+        padding: 0 10px;
+        border-radius: 8px;
+        border: 1px solid var(--light-gray);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        color: var(--dark);
+        font-weight: 600;
+        background: #fff;
+        transition: all 0.2s ease;
+    }
+
+    .pagination-link:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .pagination-link.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: #fff;
+    }
+
+    .pagination-link.disabled {
+        pointer-events: none;
+        opacity: 0.5;
+    }
+
     /* Empty State */
     .empty-state {
         text-align: center;
@@ -809,6 +880,10 @@ $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
     }
 
     @media (max-width: 768px) {
+        .pagination-wrapper {
+            flex-direction: column;
+            align-items: flex-start;
+        }
         .form-row {
             grid-template-columns: 1fr;
         }
@@ -1057,6 +1132,7 @@ $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
                 </h3>
             </div>
             <form method="GET" class="filters-grid">
+                <input type="hidden" name="page" value="1">
                 <div class="filter-group">
                     <label class="filter-label">Recherche</label>
                     <input type="text" name="search" class="filter-input"
@@ -1116,6 +1192,16 @@ $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
                 </tr>
             </thead>
             <tbody>
+                <?php if (empty($students)): ?>
+                <tr>
+                    <td colspan="10">
+                        <div class="empty-state" style="padding: 30px 20px;">
+                            <i class="fas fa-user-graduate"></i>
+                            <h3>Aucun étudiant trouvé</h3>
+                        </div>
+                    </td>
+                </tr>
+                <?php else: ?>
                 <?php foreach ($students as $student): 
             $status_class = '';
             if ($student['balance'] <= 0) {
@@ -1201,8 +1287,43 @@ $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
                     </td>
                 </tr>
                 <?php endforeach; ?>
+                <?php endif; ?>
             </tbody>
         </table>
+
+        <?php if ($total_students > 0): ?>
+        <div class="pagination-wrapper">
+            <div class="pagination-info">
+                <?php $start_item = $offset + 1; ?>
+                <?php $end_item = min($offset + $per_page, $total_students); ?>
+                Affichage de <?php echo $start_item; ?> à <?php echo $end_item; ?> sur
+                <?php echo $total_students; ?> étudiants
+            </div>
+
+            <?php if ($total_pages > 1): ?>
+            <div class="pagination">
+                <?php $prev_page = $page - 1; ?>
+                <a class="pagination-link <?php echo $page <= 1 ? 'disabled' : ''; ?>"
+                    href="students.php?<?php echo $pagination_base_query ? $pagination_base_query . '&' : ''; ?>page=<?php echo $prev_page; ?>">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+
+                <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                <a class="pagination-link <?php echo $i === $page ? 'active' : ''; ?>"
+                    href="students.php?<?php echo $pagination_base_query ? $pagination_base_query . '&' : ''; ?>page=<?php echo $i; ?>">
+                    <?php echo $i; ?>
+                </a>
+                <?php endfor; ?>
+
+                <?php $next_page = $page + 1; ?>
+                <a class="pagination-link <?php echo $page >= $total_pages ? 'disabled' : ''; ?>"
+                    href="students.php?<?php echo $pagination_base_query ? $pagination_base_query . '&' : ''; ?>page=<?php echo $next_page; ?>">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
     </div>
 
     <?php include 'includes/footer.php'; ?>
