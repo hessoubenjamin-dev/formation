@@ -7,7 +7,7 @@ function formatDate($date, $format = 'd/m/Y') {
 // Fonction pour formater les montants
 function formatAmount($amount) {
     global $currency_config;
-    return number_format($amount, DECIMAL_PLACES, ',', ' ') . ' ' . CURRENCY_SYMBOL;
+    return number_format($amount, DECIMAL_PLACES, ',', ' ') . ' ' . APP_CURRENCY_SYMBOL;
 }
 
 function formatAmountDecimal($amount, $decimals = 0) {
