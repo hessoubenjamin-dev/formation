@@ -1058,19 +1058,20 @@ if ($has_payment_month) {
                         <?php if ($has_payment_month): ?>
                         <div class="form-group">
                             <label class="form-label">Mois à payer</label>
-                            <select name="payment_month" id="paymentMonth" class="form-control" required onchange="updateReceiptPreview()">
+                            <select name="payment_month" id="paymentMonth" class="form-control" required
+                                onchange="updateReceiptPreview()">
                                 <option value="">Sélectionner le mois</option>
 
                                 <?php
-        // Option 1: Afficher tous les mois de l'année en cours
-        $current_year = date('Y');
-        for ($i = 1; $i <= 12; $i++) {
-            $month = sprintf('%d-%02d-01', $current_year, $i);
-            $month_display = getFrenchMonthName($month) . ' ' . $current_year;
-            $is_paid = in_array($month, $paid_months);
-            $is_suggested = $month == $suggested_month && !$is_paid;
-            $is_current_month = date('Y-m', strtotime($month)) == date('Y-m');
-        ?>
+                                // Option 1: Afficher tous les mois de l'année en cours
+                                $current_year = date('Y');
+                                for ($i = 1; $i <= 12; $i++) {
+                                    $month = sprintf('%d-%02d-01', $current_year, $i);
+                                    $month_display = getFrenchMonthName($month) . ' ' . $current_year;
+                                    $is_paid = in_array($month, $paid_months);
+                                    $is_suggested = $month == $suggested_month && !$is_paid;
+                                    $is_current_month = date('Y-m', strtotime($month)) == date('Y-m');
+                                ?>
                                 <option value="<?php echo $month; ?>"
                                     <?php echo $is_paid ? 'disabled style="color:#ccc"' : ''; ?>
                                     <?php echo $is_suggested ? 'selected' : ''; ?>
@@ -1132,8 +1133,8 @@ if ($has_payment_month) {
                             <!-- Quick Amounts -->
                             <?php if ($balance > 0): ?>
                             <div class="quick-amounts" style="margin-top: 10px;">
-                                <button type="button" class="quick-amount-btn" data-amount="25000">25 000 FCFA</button>
-                                <button type="button" class="quick-amount-btn" data-amount="50000">50 000 FCFA</button>
+                                <button type="button" class="quick-amount-btn" data-amount="10000">10 000 FCFA</button>
+                                <button type="button" class="quick-amount-btn" data-amount="20000">20 000 FCFA</button>
                                 <button type="button" class="quick-amount-btn" data-amount="100000">100 000
                                     FCFA</button>
                                 <button type="button" class="quick-amount-btn" data-amount="150000">150 000
@@ -1433,7 +1434,8 @@ if ($has_payment_month) {
         }
 
         const monthText = month ? (' pour le mois de ' + formatMonth(month)) : '';
-        if (!confirm('Confirmez-vous l\'enregistrement de ce paiement de ' + formatCurrency(amount) + monthText + ' ?')) {
+        if (!confirm('Confirmez-vous l\'enregistrement de ce paiement de ' + formatCurrency(amount) +
+                monthText + ' ?')) {
             e.preventDefault();
         }
     });
