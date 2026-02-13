@@ -10,6 +10,7 @@ define('DB_PASS', '05878442Benja@');
 // Configuration du site
 define('SITE_NAME', 'Gestion des Paiements Formation');
 define('SITE_URL', 'http://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . '/');
+define('COMPANY_LOGO_PATH', 'assets/images/logo.png');
 
 // Connexion à la base de données
 try {
