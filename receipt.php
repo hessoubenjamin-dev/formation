@@ -36,11 +36,19 @@ $logo_exists = is_file(__DIR__ . '/' . $logo_path);
     <title>Reçu <?php echo htmlspecialchars($payment['receipt_number']); ?> - <?php echo SITE_NAME; ?></title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+    :root {
+        --primary: #1d4ed8;
+        --primary-soft: #dbeafe;
+        --success-soft: #dcfce7;
+        --ink: #0f172a;
+        --muted: #64748b;
+    }
+
     body {
         margin: 0;
         padding: 32px;
-        font-family: Arial, sans-serif;
-        background: #f5f7fb;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        background: radial-gradient(circle at top left, #eff6ff 0%, #f8fafc 35%, #eef2ff 100%);
         color: #1e293b;
     }
 
@@ -80,10 +88,24 @@ $logo_exists = is_file(__DIR__ . '/' . $logo_path);
     }
 
     .receipt-card {
+        position: relative;
         background: #fff;
-        border-radius: 14px;
-        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        border-radius: 18px;
+        border: 1px solid #dbeafe;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.1);
         padding: 36px;
+        overflow: hidden;
+    }
+
+    .receipt-card::before {
+        content: '';
+        position: absolute;
+        right: -110px;
+        top: -110px;
+        width: 280px;
+        height: 280px;
+        border-radius: 50%;
+        background: radial-gradient(circle at center, rgba(37, 99, 235, 0.22) 0%, rgba(37, 99, 235, 0) 70%);
     }
 
     .receipt-header {
@@ -127,8 +149,9 @@ $logo_exists = is_file(__DIR__ . '/' . $logo_path);
 
     .receipt-title h1 {
         margin: 0;
-        font-size: 28px;
-        color: #0f172a;
+        font-size: 30px;
+        letter-spacing: 0.08em;
+        color: var(--ink);
     }
 
     .receipt-number {
@@ -146,8 +169,9 @@ $logo_exists = is_file(__DIR__ . '/' . $logo_path);
     }
 
     .item {
-        background: #f8fafc;
-        border-radius: 10px;
+        background: linear-gradient(160deg, #f8fafc 0%, #f1f5f9 100%);
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
         padding: 14px;
     }
 
@@ -165,7 +189,8 @@ $logo_exists = is_file(__DIR__ . '/' . $logo_path);
     }
 
     .amount-highlight {
-        background: #ecfdf5;
+        background: linear-gradient(160deg, var(--success-soft) 0%, #f0fdf4 100%);
+        border-color: #86efac;
     }
 
     .amount-highlight .value {
@@ -175,10 +200,42 @@ $logo_exists = is_file(__DIR__ . '/' . $logo_path);
 
     .footer-note {
         margin-top: 26px;
-        padding-top: 16px;
+        padding-top: 18px;
         border-top: 1px dashed #cbd5e1;
         font-size: 13px;
         color: #475569;
+        display: grid;
+        gap: 16px;
+    }
+
+    .signature-box {
+        margin-left: auto;
+        text-align: right;
+        min-width: 270px;
+    }
+
+    .signature-line {
+        border-top: 1px solid #94a3b8;
+        margin-top: 24px;
+        padding-top: 8px;
+        color: var(--muted);
+        font-size: 12px;
+    }
+
+    .signature-name {
+        display: block;
+        margin-top: 10px;
+        color: var(--ink);
+        font-family: 'Brush Script MT', 'Segoe Script', cursive;
+        font-size: 28px;
+        line-height: 1;
+    }
+
+    .signature-role {
+        margin-top: 8px;
+        font-size: 13px;
+        color: #334155;
+        font-weight: 600;
     }
 
     @media print {
@@ -195,6 +252,11 @@ $logo_exists = is_file(__DIR__ . '/' . $logo_path);
             box-shadow: none;
             border-radius: 0;
             padding: 0;
+            border: none;
+        }
+
+        .receipt-card::before {
+            display: none;
         }
     }
     </style>
@@ -280,6 +342,12 @@ $logo_exists = is_file(__DIR__ . '/' . $logo_path);
             <div class="footer-note">
                 Merci pour votre paiement. Ce reçu est généré automatiquement et peut être exporté en PDF depuis la
                 fenêtre d'impression de votre navigateur.
+
+                <div class="signature-box">
+                    <span class="signature-name">Hessou Nonvignon Benjamin</span>
+                    <div class="signature-role">CEO de Code-Codeur</div>
+                    <div class="signature-line">Signature autorisée</div>
+                </div>
             </div>
         </div>
     </div>
