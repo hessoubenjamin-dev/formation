@@ -157,3 +157,84 @@ COMMIT;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+
+-- --------------------------------------------------------
+-- Extension: espaces formateur / apprenant
+-- --------------------------------------------------------
+
+ALTER TABLE `users`
+  MODIFY `role` enum('admin','manager','formateur','apprenant') DEFAULT 'manager';
+
+ALTER TABLE `users`
+  ADD COLUMN `student_id` int(11) DEFAULT NULL;
+
+CREATE TABLE IF NOT EXISTS `trainings` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(255) NOT NULL,
+  `duration_months` int(11) NOT NULL,
+  `technology_watch` text DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `training_modules` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `training_id` int(11) NOT NULL,
+  `module_title` varchar(255) NOT NULL,
+  `module_order` int(11) NOT NULL DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_training_modules_training` (`training_id`),
+  CONSTRAINT `training_modules_ibfk_1` FOREIGN KEY (`training_id`) REFERENCES `trainings` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `training_resources` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `training_id` int(11) NOT NULL,
+  `module_id` int(11) DEFAULT NULL,
+  `resource_type` enum('exercice','devoir','video','session_note') NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `resource_url` varchar(500) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `due_date` date DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_training_resources_training` (`training_id`),
+  KEY `idx_training_resources_module` (`module_id`),
+  CONSTRAINT `training_resources_ibfk_1` FOREIGN KEY (`training_id`) REFERENCES `trainings` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `training_resources_ibfk_2` FOREIGN KEY (`module_id`) REFERENCES `training_modules` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `student_trainings` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `student_id` int(11) NOT NULL,
+  `training_id` int(11) NOT NULL,
+  `assigned_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_student_training` (`student_id`,`training_id`),
+  KEY `idx_student_trainings_training` (`training_id`),
+  CONSTRAINT `student_trainings_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `students` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `student_trainings_ibfk_2` FOREIGN KEY (`training_id`) REFERENCES `trainings` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `student_progress` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `student_id` int(11) NOT NULL,
+  `training_id` int(11) NOT NULL,
+  `module_id` int(11) DEFAULT NULL,
+  `resource_id` int(11) DEFAULT NULL,
+  `status` enum('non_commence','en_cours','valide') NOT NULL DEFAULT 'non_commence',
+  `validated_by` int(11) DEFAULT NULL,
+  `validated_at` timestamp NULL DEFAULT NULL,
+  `comment` text DEFAULT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_progress` (`student_id`,`training_id`,`module_id`,`resource_id`),
+  KEY `idx_student_progress_resource` (`resource_id`),
+  CONSTRAINT `student_progress_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `students` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `student_progress_ibfk_2` FOREIGN KEY (`training_id`) REFERENCES `trainings` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `student_progress_ibfk_3` FOREIGN KEY (`module_id`) REFERENCES `training_modules` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `student_progress_ibfk_4` FOREIGN KEY (`resource_id`) REFERENCES `training_resources` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

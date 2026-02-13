@@ -754,6 +754,21 @@ if (!function_exists('isLoggedIn')) {
                         <span style="color:black" ;>Paiements</span>
                     </a>
                 </li>
+
+                <li class="nav-item">
+                    <a href="trainer_space.php"
+                        class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'trainer_space.php' ? 'active' : ''; ?>">
+                        <i style="color:black" ; class="fas fa-chalkboard-teacher nav-icon"></i>
+                        <span style="color:black" ;>Espace formateur</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="learner_space.php"
+                        class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'learner_space.php' ? 'active' : ''; ?>">
+                        <i style="color:black" ; class="fas fa-user-graduate nav-icon"></i>
+                        <span style="color:black" ;>Espace apprenant</span>
+                    </a>
+                </li>
                 <li class="nav-item">
                     <a href="raports.php"
                         class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>">
@@ -809,7 +824,9 @@ if (!function_exists('isLoggedIn')) {
                 'reports.php' => 'Rapports',
                 'users.php' => 'Utilisateurs',
                 'settings.php' => 'Paramètres',
-                'profile.php' => 'Mon profil'
+                'profile.php' => 'Mon profil',
+                'trainer_space.php' => 'Espace formateur',
+                'learner_space.php' => 'Espace apprenant'
             ];
             
             if (isset($page_names[$current_page])) {

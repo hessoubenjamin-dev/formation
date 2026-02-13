@@ -32,6 +32,17 @@ function requireLogin() {
     }
 }
 
+// Fonction pour limiter l'accès par rôle
+function requireRoles(array $roles) {
+    requireLogin();
+
+    $currentRole = $_SESSION['role'] ?? '';
+    if (!in_array($currentRole, $roles, true)) {
+        header('Location: dashboard.php?error=access_denied');
+        exit();
+    }
+}
+
 // Fonction pour obtenir le solde d'un étudiant
 function getStudentBalance($pdo, $student_id) {
     $sql = "SELECT total_amount, paid_amount, (total_amount - paid_amount) as balance 

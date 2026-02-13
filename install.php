@@ -55,8 +55,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             password VARCHAR(255) NOT NULL,
             email VARCHAR(255),
             full_name VARCHAR(100),
-            role ENUM('admin', 'manager') DEFAULT 'manager',
+            role ENUM('admin', 'manager', 'formateur', 'apprenant') DEFAULT 'manager',
+            student_id INT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        -- Table des formations
+        CREATE TABLE IF NOT EXISTS trainings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            duration_months INT NOT NULL,
+            technology_watch TEXT NULL,
+            created_by INT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        -- Table des modules de formation
+        CREATE TABLE IF NOT EXISTS training_modules (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            training_id INT NOT NULL,
+            module_title VARCHAR(255) NOT NULL,
+            module_order INT NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (training_id) REFERENCES trainings(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        -- Table des ressources pédagogiques
+        CREATE TABLE IF NOT EXISTS training_resources (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            training_id INT NOT NULL,
+            module_id INT NULL,
+            resource_type ENUM('exercice', 'devoir', 'video', 'session_note') NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            resource_url VARCHAR(500) NULL,
+            description TEXT NULL,
+            due_date DATE NULL,
+            created_by INT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (training_id) REFERENCES trainings(id) ON DELETE CASCADE,
+            FOREIGN KEY (module_id) REFERENCES training_modules(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        -- Affectation des apprenants aux formations
+        CREATE TABLE IF NOT EXISTS student_trainings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_id INT NOT NULL,
+            training_id INT NOT NULL,
+            assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_student_training (student_id, training_id),
+            FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+            FOREIGN KEY (training_id) REFERENCES trainings(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        -- Progression des apprenants
+        CREATE TABLE IF NOT EXISTS student_progress (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_id INT NOT NULL,
+            training_id INT NOT NULL,
+            module_id INT NULL,
+            resource_id INT NULL,
+            status ENUM('non_commence', 'en_cours', 'valide') NOT NULL DEFAULT 'non_commence',
+            validated_by INT NULL,
+            validated_at TIMESTAMP NULL,
+            comment TEXT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_progress (student_id, training_id, module_id, resource_id),
+            FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+            FOREIGN KEY (training_id) REFERENCES trainings(id) ON DELETE CASCADE,
+            FOREIGN KEY (module_id) REFERENCES training_modules(id) ON DELETE CASCADE,
+            FOREIGN KEY (resource_id) REFERENCES training_resources(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ";
         

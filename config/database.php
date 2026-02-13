@@ -24,6 +24,10 @@ try {
     die('Erreur de connexion à la base de données: ' . $e->getMessage());
 }
 
+
+require_once __DIR__ . '/../includes/training_schema.php';
+initializeTrainingSchema($pdo);
+
 // Inclure la configuration de la devise
 require_once 'currency.php';
 ?>
