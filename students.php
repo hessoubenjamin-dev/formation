@@ -156,7 +156,7 @@ $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
         --warning: #f97316;
         --danger: #ef4444;
         --light: #f8fafc;
-        --dark: #1e293b;
+        --dark: #1e293b;    
         --gray: #64748b;
         --light-gray: #e2e8f0;
     }
