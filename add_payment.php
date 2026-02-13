@@ -47,27 +47,6 @@ if ($has_payment_month) {
     $paid_months = $stmt_months->fetchAll(PDO::FETCH_COLUMN);
 }
 
-// Fonction pour obtenir le nom du mois en français
-function getFrenchMonthName($date) {
-    $months_fr = [
-        'January' => 'Janvier',
-        'February' => 'Février',
-        'March' => 'Mars',
-        'April' => 'Avril',
-        'May' => 'Mai',
-        'June' => 'Juin',
-        'July' => 'Juillet',
-        'August' => 'Août',
-        'September' => 'Septembre',
-        'October' => 'Octobre',
-        'November' => 'Novembre',
-        'December' => 'Décembre'
-    ];
-    
-    $english_month = date('F', strtotime($date));
-    return $months_fr[$english_month] ?? $english_month;
-}
-
 // Calculer les prochains mois à payer (2 mois en avant)
 $current_date = new DateTime();
 $months_to_pay = [];
