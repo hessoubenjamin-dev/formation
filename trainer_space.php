@@ -110,6 +110,13 @@ $trainings = $pdo->query('SELECT * FROM trainings ORDER BY created_at DESC')->fe
 $modules = $pdo->query('SELECT tm.*, t.title as training_title FROM training_modules tm JOIN trainings t ON t.id = tm.training_id ORDER BY t.title, tm.module_order')->fetchAll(PDO::FETCH_ASSOC);
 $students = $pdo->query('SELECT id, first_name, last_name FROM students ORDER BY first_name, last_name')->fetchAll(PDO::FETCH_ASSOC);
 $resources = $pdo->query('SELECT tr.*, t.title AS training_title FROM training_resources tr JOIN trainings t ON t.id = tr.training_id ORDER BY tr.created_at DESC LIMIT 20')->fetchAll(PDO::FETCH_ASSOC);
+
+$stats = [
+    'formations' => count($trainings),
+    'modules' => count($modules),
+    'ressources' => count($resources),
+    'apprenants' => count($students),
+];
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -119,28 +126,73 @@ $resources = $pdo->query('SELECT tr.*, t.title AS training_title FROM training_r
     <title>Espace formateur - <?php echo SITE_NAME; ?></title>
     <link rel="stylesheet" href="assets/css/style.css">
     <style>
-        .container { max-width: 1300px; margin: 20px auto; padding: 20px; }
+        body { background: #f1f5f9; }
+        .dashboard-layout { max-width: 1400px; margin: 20px auto; padding: 0 20px 20px; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 20px; }
+        .sidebar { background: #0f172a; color: #e2e8f0; border-radius: 16px; padding: 22px; position: sticky; top: 20px; height: fit-content; }
+        .sidebar h2 { color: #fff; margin-bottom: 6px; }
+        .sidebar p { margin-bottom: 18px; color: #94a3b8; font-size: 14px; }
+        .menu-list { list-style: none; margin: 0; padding: 0; }
+        .menu-list li + li { margin-top: 8px; }
+        .menu-list a { display: block; color: #cbd5e1; text-decoration: none; padding: 10px 12px; border-radius: 10px; transition: .2s; }
+        .menu-list a:hover { background: #1e293b; color: #fff; }
+        .content { min-width: 0; }
+        .container { padding: 8px 0 0; }
+        .hero { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }
+        .hero h1 { margin: 0; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .stat-card { background: #fff; border-radius: 12px; padding: 14px; box-shadow: 0 6px 20px rgba(15,23,42,.08); }
+        .stat-card span { display: block; font-size: 12px; text-transform: uppercase; color: #64748b; letter-spacing: .04em; }
+        .stat-card strong { font-size: 26px; color: #0f172a; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
-        .card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+        .card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 6px 20px rgba(15,23,42,.08); }
         .card h3 { margin-bottom: 12px; }
         input, select, textarea { width: 100%; padding: 10px; margin-bottom: 10px; border:1px solid #ddd; border-radius: 8px; }
         button { background:#4361ee; color:#fff; border:0; padding:10px 14px; border-radius:8px; cursor:pointer; }
         .alert { padding:12px; border-radius:8px; margin-bottom:15px; }
         .ok { background:#dcfce7; color:#166534; }
         .ko { background:#fee2e2; color:#991b1b; }
+        @media (max-width: 980px) {
+            .dashboard-layout { grid-template-columns: 1fr; }
+            .sidebar { position: static; }
+        }
     </style>
 </head>
 <body>
 <?php include 'includes/header.php'; ?>
-<div class="container">
-    <h1>Espace formateur</h1>
-    <p>Ajoutez les exercices, devoirs, liens vidéos, modules, durée de formation et suivi de veille technologique.</p>
+<div class="dashboard-layout">
+    <aside class="sidebar">
+        <h2>Dashboard</h2>
+        <p>Espace formateur</p>
+        <ul class="menu-list">
+            <li><a href="#formation">Créer une formation</a></li>
+            <li><a href="#module">Ajouter un module</a></li>
+            <li><a href="#ressource">Ajouter une ressource</a></li>
+            <li><a href="#assignation">Affecter un apprenant</a></li>
+            <li><a href="#progression">Valider la progression</a></li>
+        </ul>
+    </aside>
+
+    <div class="content">
+    <div class="container">
+        <div class="hero">
+            <div>
+                <h1>Espace formateur</h1>
+                <p>Gérez vos formations comme un dashboard centralisé.</p>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card"><span>Formations</span><strong><?php echo (int) $stats['formations']; ?></strong></div>
+            <div class="stat-card"><span>Modules</span><strong><?php echo (int) $stats['modules']; ?></strong></div>
+            <div class="stat-card"><span>Ressources récentes</span><strong><?php echo (int) $stats['ressources']; ?></strong></div>
+            <div class="stat-card"><span>Apprenants</span><strong><?php echo (int) $stats['apprenants']; ?></strong></div>
+        </div>
 
     <?php if ($success_message): ?><div class="alert ok"><?php echo htmlspecialchars($success_message); ?></div><?php endif; ?>
     <?php if ($error_message): ?><div class="alert ko"><?php echo htmlspecialchars($error_message); ?></div><?php endif; ?>
 
     <div class="grid">
-        <div class="card">
+        <div class="card" id="formation">
             <h3>1) Créer une formation</h3>
             <form method="post">
                 <input type="text" name="title" placeholder="Nom de la formation" required>
@@ -150,7 +202,7 @@ $resources = $pdo->query('SELECT tr.*, t.title AS training_title FROM training_r
             </form>
         </div>
 
-        <div class="card">
+        <div class="card" id="module">
             <h3>2) Ajouter un module</h3>
             <form method="post">
                 <select name="training_id" required>
@@ -165,7 +217,7 @@ $resources = $pdo->query('SELECT tr.*, t.title AS training_title FROM training_r
             </form>
         </div>
 
-        <div class="card">
+        <div class="card" id="ressource">
             <h3>3) Ajouter une ressource (exo/devoir/vidéo/session)</h3>
             <form method="post">
                 <select name="training_id" required>
@@ -194,7 +246,7 @@ $resources = $pdo->query('SELECT tr.*, t.title AS training_title FROM training_r
             </form>
         </div>
 
-        <div class="card">
+        <div class="card" id="assignation">
             <h3>4) Affecter un apprenant à une formation</h3>
             <form method="post">
                 <select name="student_id" required>
@@ -213,7 +265,7 @@ $resources = $pdo->query('SELECT tr.*, t.title AS training_title FROM training_r
             </form>
         </div>
 
-        <div class="card">
+        <div class="card" id="progression">
             <h3>5) Valider la progression (exo/devoir/projet)</h3>
             <form method="post">
                 <select name="student_id" required>
@@ -244,6 +296,8 @@ $resources = $pdo->query('SELECT tr.*, t.title AS training_title FROM training_r
             </form>
         </div>
     </div>
+</div>
+</div>
 </div>
 </body>
 </html>
