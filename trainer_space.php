@@ -1,157 +1,12 @@
 <?php
 require_once 'includes/functions.php';
 require_once 'config/database.php';
+require_once 'includes/trainer_space_helpers.php';
 requireRoles(['admin', 'manager', 'formateur']);
 
-function syncTrainingsFromStudents(PDO $pdo): void {
-    $studentFormations = $pdo->query("SELECT DISTINCT TRIM(formation_type) AS formation_type FROM students WHERE formation_type IS NOT NULL AND TRIM(formation_type) != ''")->fetchAll(PDO::FETCH_COLUMN);
-
-    if (!$studentFormations) {
-        return;
-    }
-
-    $existingTrainings = $pdo->query('SELECT id, title FROM trainings')->fetchAll(PDO::FETCH_ASSOC);
-    $existingTitles = [];
-
-    foreach ($existingTrainings as $training) {
-        $normalizedTitle = mb_strtolower(trim((string) ($training['title'] ?? '')));
-        if ($normalizedTitle !== '') {
-            $existingTitles[$normalizedTitle] = true;
-        }
-    }
-
-    $insertStmt = $pdo->prepare('INSERT INTO trainings (title, duration_months, technology_watch, created_by) VALUES (?, ?, ?, ?)');
-
-    foreach ($studentFormations as $formationTitle) {
-        $formationTitle = trim((string) $formationTitle);
-        if ($formationTitle === '') {
-            continue;
-        }
-
-        $normalizedTitle = mb_strtolower($formationTitle);
-        if (!isset($existingTitles[$normalizedTitle])) {
-            $insertStmt->execute([$formationTitle, 1, null, $_SESSION['user_id'] ?? null]);
-            $existingTitles[$normalizedTitle] = true;
-        }
-    }
-}
-
 syncTrainingsFromStudents($pdo);
-
-$success_message = '';
-$error_message = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    try {
-        if (isset($_POST['create_training'])) {
-            $title = trim($_POST['title'] ?? '');
-            $duration_months = max(1, (int) ($_POST['duration_months'] ?? 1));
-            $technology_watch = trim($_POST['technology_watch'] ?? '');
-
-            if ($title === '') {
-                throw new RuntimeException('Le titre de la formation est obligatoire.');
-            }
-
-            $stmt = $pdo->prepare('INSERT INTO trainings (title, duration_months, technology_watch, created_by) VALUES (?, ?, ?, ?)');
-            $stmt->execute([$title, $duration_months, $technology_watch ?: null, $_SESSION['user_id'] ?? null]);
-            $success_message = 'Formation créée avec succès.';
-        }
-
-        if (isset($_POST['add_module'])) {
-            $training_id = (int) ($_POST['training_id'] ?? 0);
-            $module_title = trim($_POST['module_title'] ?? '');
-            $module_order = max(1, (int) ($_POST['module_order'] ?? 1));
-
-            if ($training_id < 1 || $module_title === '') {
-                throw new RuntimeException('Veuillez sélectionner une formation et saisir le nom du module.');
-            }
-
-            $stmt = $pdo->prepare('INSERT INTO training_modules (training_id, module_title, module_order) VALUES (?, ?, ?)');
-            $stmt->execute([$training_id, $module_title, $module_order]);
-            $success_message = 'Module ajouté avec succès.';
-        }
-
-        if (isset($_POST['add_resource'])) {
-            $training_id = (int) ($_POST['training_id'] ?? 0);
-            $module_id = (int) ($_POST['module_id'] ?? 0);
-            $resource_type = $_POST['resource_type'] ?? '';
-            $title = trim($_POST['resource_title'] ?? '');
-            $resource_url = trim($_POST['resource_url'] ?? '');
-            $description = trim($_POST['description'] ?? '');
-            $due_date = $_POST['due_date'] ?? null;
-
-            $allowed_types = ['exercice', 'devoir', 'video', 'session_note'];
-            if ($training_id < 1 || $title === '' || !in_array($resource_type, $allowed_types, true)) {
-                throw new RuntimeException('Veuillez renseigner les champs obligatoires de la ressource.');
-            }
-
-            $stmt = $pdo->prepare('INSERT INTO training_resources (training_id, module_id, resource_type, title, resource_url, description, due_date, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([$training_id, $module_id ?: null, $resource_type, $title, $resource_url ?: null, $description ?: null, $due_date ?: null, $_SESSION['user_id'] ?? null]);
-            $success_message = 'Ressource pédagogique ajoutée.';
-        }
-
-        if (isset($_POST['assign_student'])) {
-            $student_id = (int) ($_POST['student_id'] ?? 0);
-            $training_id = (int) ($_POST['training_id'] ?? 0);
-
-            if ($student_id < 1 || $training_id < 1) {
-                throw new RuntimeException('Veuillez choisir un apprenant et une formation.');
-            }
-
-            $stmt = $pdo->prepare('INSERT IGNORE INTO student_trainings (student_id, training_id) VALUES (?, ?)');
-            $stmt->execute([$student_id, $training_id]);
-            $success_message = 'Apprenant affecté à la formation.';
-        }
-
-        if (isset($_POST['validate_progress'])) {
-            $student_id = (int) ($_POST['student_id'] ?? 0);
-            $training_id = (int) ($_POST['training_id'] ?? 0);
-            $resource_id = (int) ($_POST['resource_id'] ?? 0);
-            $status = $_POST['status'] ?? 'non_commence';
-            $comment = trim($_POST['comment'] ?? '');
-            $allowed_status = ['non_commence', 'en_cours', 'valide'];
-
-            if (!in_array($status, $allowed_status, true) || $student_id < 1 || $training_id < 1 || $resource_id < 1) {
-                throw new RuntimeException('Données de progression invalides.');
-            }
-
-            $moduleStmt = $pdo->prepare('SELECT module_id FROM training_resources WHERE id = ?');
-            $moduleStmt->execute([$resource_id]);
-            $module_id = $moduleStmt->fetchColumn();
-
-            $stmt = $pdo->prepare(
-                'INSERT INTO student_progress (student_id, training_id, module_id, resource_id, status, validated_by, validated_at, comment)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                 ON DUPLICATE KEY UPDATE status = VALUES(status), validated_by = VALUES(validated_by), validated_at = VALUES(validated_at), comment = VALUES(comment)'
-            );
-            $stmt->execute([
-                $student_id,
-                $training_id,
-                $module_id ?: null,
-                $resource_id,
-                $status,
-                $_SESSION['user_id'] ?? null,
-                $status === 'valide' ? date('Y-m-d H:i:s') : null,
-                $comment ?: null,
-            ]);
-            $success_message = 'Progression mise à jour.';
-        }
-    } catch (Throwable $e) {
-        $error_message = $e->getMessage();
-    }
-}
-
-$trainings = $pdo->query('SELECT * FROM trainings ORDER BY created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
-$modules = $pdo->query('SELECT tm.*, t.title as training_title FROM training_modules tm JOIN trainings t ON t.id = tm.training_id ORDER BY t.title, tm.module_order')->fetchAll(PDO::FETCH_ASSOC);
-$students = $pdo->query('SELECT id, first_name, last_name FROM students ORDER BY first_name, last_name')->fetchAll(PDO::FETCH_ASSOC);
-$resources = $pdo->query('SELECT tr.*, t.title AS training_title FROM training_resources tr JOIN trainings t ON t.id = tr.training_id ORDER BY tr.created_at DESC LIMIT 20')->fetchAll(PDO::FETCH_ASSOC);
-
-$stats = [
-    'formations' => count($trainings),
-    'modules' => count($modules),
-    'ressources' => count($resources),
-    'apprenants' => count($students),
-];
+$stats = getTrainerStats($pdo);
+$currentPage = basename($_SERVER['PHP_SELF']);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -169,171 +24,45 @@ $stats = [
         .menu-list { list-style: none; margin: 0; padding: 0; }
         .menu-list li + li { margin-top: 8px; }
         .menu-list a { display: block; color: #cbd5e1; text-decoration: none; padding: 10px 12px; border-radius: 10px; transition: .2s; }
-        .menu-list a:hover { background: #1e293b; color: #fff; }
+        .menu-list a:hover, .menu-list a.active { background: #1e293b; color: #fff; }
         .content { min-width: 0; }
-        .container { padding: 8px 0 0; }
-        .hero { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }
-        .hero h1 { margin: 0; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 6px 20px rgba(15,23,42,.08); }
+        .hero { margin-bottom: 16px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 20px 0; }
         .stat-card { background: #fff; border-radius: 12px; padding: 14px; box-shadow: 0 6px 20px rgba(15,23,42,.08); }
         .stat-card span { display: block; font-size: 12px; text-transform: uppercase; color: #64748b; letter-spacing: .04em; }
         .stat-card strong { font-size: 26px; color: #0f172a; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
-        .card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 6px 20px rgba(15,23,42,.08); }
-        .card h3 { margin-bottom: 12px; }
-        input, select, textarea { width: 100%; padding: 10px; margin-bottom: 10px; border:1px solid #ddd; border-radius: 8px; }
-        button { background:#4361ee; color:#fff; border:0; padding:10px 14px; border-radius:8px; cursor:pointer; }
-        .alert { padding:12px; border-radius:8px; margin-bottom:15px; }
-        .ok { background:#dcfce7; color:#166534; }
-        .ko { background:#fee2e2; color:#991b1b; }
-        @media (max-width: 980px) {
-            .dashboard-layout { grid-template-columns: 1fr; }
-            .sidebar { position: static; }
-        }
+        .links-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+        .menu-card { display:block; text-decoration:none; color:#0f172a; background:#fff; border:1px solid #e2e8f0; padding:14px; border-radius:10px; }
+        .menu-card:hover { border-color:#4361ee; }
+        @media (max-width: 980px) { .dashboard-layout { grid-template-columns: 1fr; } .sidebar { position: static; } }
     </style>
 </head>
 <body>
 <?php include 'includes/header.php'; ?>
 <div class="dashboard-layout">
-    <aside class="sidebar">
-        <h2>Dashboard</h2>
-        <p>Espace formateur</p>
-        <ul class="menu-list">
-            <li><a href="/trainer_space.php">Page /trainer_space.php</a></li>
-            <li><a href="#formation">Créer une formation</a></li>
-            <li><a href="#module">Ajouter un module</a></li>
-            <li><a href="#ressource">Ajouter une ressource</a></li>
-            <li><a href="#assignation">Affecter un apprenant</a></li>
-            <li><a href="#progression">Valider la progression</a></li>
-        </ul>
-    </aside>
+    <?php renderTrainerSidebar($currentPage); ?>
 
     <div class="content">
-    <div class="container">
-        <div class="hero">
-            <div>
-                <h1>Espace formateur</h1>
-                <p>Gérez vos formations comme un dashboard centralisé.</p>
-            </div>
+        <div class="hero card">
+            <h1>Espace formateur</h1>
+            <p>Accès rapide à chaque module du menu, avec une page dédiée et bien structurée.</p>
         </div>
 
         <div class="stats-grid">
-            <div class="stat-card"><span>Formations</span><strong><?php echo (int) $stats['formations']; ?></strong></div>
-            <div class="stat-card"><span>Modules</span><strong><?php echo (int) $stats['modules']; ?></strong></div>
-            <div class="stat-card"><span>Ressources récentes</span><strong><?php echo (int) $stats['ressources']; ?></strong></div>
-            <div class="stat-card"><span>Apprenants</span><strong><?php echo (int) $stats['apprenants']; ?></strong></div>
+            <div class="stat-card"><span>Formations</span><strong><?php echo $stats['formations']; ?></strong></div>
+            <div class="stat-card"><span>Modules</span><strong><?php echo $stats['modules']; ?></strong></div>
+            <div class="stat-card"><span>Ressources</span><strong><?php echo $stats['ressources']; ?></strong></div>
+            <div class="stat-card"><span>Apprenants</span><strong><?php echo $stats['apprenants']; ?></strong></div>
         </div>
 
-    <?php if ($success_message): ?><div class="alert ok"><?php echo htmlspecialchars($success_message); ?></div><?php endif; ?>
-    <?php if ($error_message): ?><div class="alert ko"><?php echo htmlspecialchars($error_message); ?></div><?php endif; ?>
-
-    <div class="grid">
-        <div class="card" id="formation">
-            <h3>1) Créer une formation</h3>
-            <form method="post">
-                <input type="text" name="title" placeholder="Nom de la formation" required>
-                <input type="number" name="duration_months" min="1" placeholder="Durée (en mois)" required>
-                <textarea name="technology_watch" placeholder="Veille technologique (IA, cybersécurité, cloud, etc.)"></textarea>
-                <button type="submit" name="create_training">Créer</button>
-            </form>
-        </div>
-
-        <div class="card" id="module">
-            <h3>2) Ajouter un module</h3>
-            <form method="post">
-                <select name="training_id" required>
-                    <option value="">Formation</option>
-                    <?php foreach ($trainings as $training): ?>
-                    <option value="<?php echo (int) $training['id']; ?>"><?php echo htmlspecialchars($training['title']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <input type="text" name="module_title" placeholder="Nom du module" required>
-                <input type="number" name="module_order" min="1" value="1" required>
-                <button type="submit" name="add_module">Ajouter</button>
-            </form>
-        </div>
-
-        <div class="card" id="ressource">
-            <h3>3) Ajouter une ressource (exo/devoir/vidéo/session)</h3>
-            <form method="post">
-                <select name="training_id" required>
-                    <option value="">Formation</option>
-                    <?php foreach ($trainings as $training): ?>
-                    <option value="<?php echo (int) $training['id']; ?>"><?php echo htmlspecialchars($training['title']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select name="module_id">
-                    <option value="">Module (optionnel)</option>
-                    <?php foreach ($modules as $module): ?>
-                    <option value="<?php echo (int) $module['id']; ?>"><?php echo htmlspecialchars($module['training_title'] . ' - ' . $module['module_title']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select name="resource_type" required>
-                    <option value="exercice">Exercice</option>
-                    <option value="devoir">Devoir</option>
-                    <option value="video">Lien vidéo</option>
-                    <option value="session_note">Session passée</option>
-                </select>
-                <input type="text" name="resource_title" placeholder="Titre" required>
-                <input type="url" name="resource_url" placeholder="Lien (si vidéo/support)">
-                <textarea name="description" placeholder="Description"></textarea>
-                <input type="date" name="due_date">
-                <button type="submit" name="add_resource">Ajouter</button>
-            </form>
-        </div>
-
-        <div class="card" id="assignation">
-            <h3>4) Affecter un apprenant à une formation</h3>
-            <form method="post">
-                <select name="student_id" required>
-                    <option value="">Apprenant</option>
-                    <?php foreach ($students as $student): ?>
-                    <option value="<?php echo (int) $student['id']; ?>"><?php echo htmlspecialchars($student['first_name'] . ' ' . $student['last_name']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select name="training_id" required>
-                    <option value="">Formation</option>
-                    <?php foreach ($trainings as $training): ?>
-                    <option value="<?php echo (int) $training['id']; ?>"><?php echo htmlspecialchars($training['title']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <button type="submit" name="assign_student">Affecter</button>
-            </form>
-        </div>
-
-        <div class="card" id="progression">
-            <h3>5) Valider la progression (exo/devoir/projet)</h3>
-            <form method="post">
-                <select name="student_id" required>
-                    <option value="">Apprenant</option>
-                    <?php foreach ($students as $student): ?>
-                    <option value="<?php echo (int) $student['id']; ?>"><?php echo htmlspecialchars($student['first_name'] . ' ' . $student['last_name']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select name="training_id" required>
-                    <option value="">Formation</option>
-                    <?php foreach ($trainings as $training): ?>
-                    <option value="<?php echo (int) $training['id']; ?>"><?php echo htmlspecialchars($training['title']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select name="resource_id" required>
-                    <option value="">Ressource</option>
-                    <?php foreach ($resources as $resource): ?>
-                    <option value="<?php echo (int) $resource['id']; ?>"><?php echo htmlspecialchars($resource['training_title'] . ' - ' . $resource['title']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select name="status" required>
-                    <option value="non_commence">Non commencé</option>
-                    <option value="en_cours">En cours</option>
-                    <option value="valide">Validé</option>
-                </select>
-                <textarea name="comment" placeholder="Commentaire"></textarea>
-                <button type="submit" name="validate_progress">Mettre à jour</button>
-            </form>
+        <div class="links-grid">
+            <a class="menu-card" href="trainer_create_training.php">Créer une formation</a>
+            <a class="menu-card" href="trainer_add_module.php">Ajouter un module</a>
+            <a class="menu-card" href="trainer_add_resource.php">Ajouter une ressource</a>
+            <a class="menu-card" href="trainer_assign_learner.php">Affecter un apprenant</a>
+            <a class="menu-card" href="trainer_validate_progress.php">Valider la progression</a>
         </div>
     </div>
 </div>
-</div>
-</div>
-</body>
-</html>
+<?php include 'includes/footer.php'; ?>
