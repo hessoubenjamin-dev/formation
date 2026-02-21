@@ -3,6 +3,41 @@ require_once 'includes/functions.php';
 require_once 'config/database.php';
 requireRoles(['admin', 'manager', 'formateur']);
 
+function syncTrainingsFromStudents(PDO $pdo): void {
+    $studentFormations = $pdo->query("SELECT DISTINCT TRIM(formation_type) AS formation_type FROM students WHERE formation_type IS NOT NULL AND TRIM(formation_type) != ''")->fetchAll(PDO::FETCH_COLUMN);
+
+    if (!$studentFormations) {
+        return;
+    }
+
+    $existingTrainings = $pdo->query('SELECT id, title FROM trainings')->fetchAll(PDO::FETCH_ASSOC);
+    $existingTitles = [];
+
+    foreach ($existingTrainings as $training) {
+        $normalizedTitle = mb_strtolower(trim((string) ($training['title'] ?? '')));
+        if ($normalizedTitle !== '') {
+            $existingTitles[$normalizedTitle] = true;
+        }
+    }
+
+    $insertStmt = $pdo->prepare('INSERT INTO trainings (title, duration_months, technology_watch, created_by) VALUES (?, ?, ?, ?)');
+
+    foreach ($studentFormations as $formationTitle) {
+        $formationTitle = trim((string) $formationTitle);
+        if ($formationTitle === '') {
+            continue;
+        }
+
+        $normalizedTitle = mb_strtolower($formationTitle);
+        if (!isset($existingTitles[$normalizedTitle])) {
+            $insertStmt->execute([$formationTitle, 1, null, $_SESSION['user_id'] ?? null]);
+            $existingTitles[$normalizedTitle] = true;
+        }
+    }
+}
+
+syncTrainingsFromStudents($pdo);
+
 $success_message = '';
 $error_message = '';
 
@@ -164,6 +199,7 @@ $stats = [
         <h2>Dashboard</h2>
         <p>Espace formateur</p>
         <ul class="menu-list">
+            <li><a href="/trainer_space.php">Page /trainer_space.php</a></li>
             <li><a href="#formation">Créer une formation</a></li>
             <li><a href="#module">Ajouter un module</a></li>
             <li><a href="#ressource">Ajouter une ressource</a></li>
