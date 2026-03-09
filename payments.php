@@ -1349,7 +1349,6 @@ $recent_payments = $pdo->query($recent_sql)->fetchAll(PDO::FETCH_ASSOC);
         <?php endif; ?>
     </div>
 
-    <?php include 'includes/footer.php'; ?>
 
     <script>
     // Format currency
@@ -1734,6 +1733,5 @@ function confirmDelete(paymentId) {
         }
     });
     </script>
-</body>
 
-</html>
+    <?php include 'includes/footer.php'; ?>
