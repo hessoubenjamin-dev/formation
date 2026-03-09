@@ -1282,9 +1282,9 @@ $recent_payments = $pdo->query($recent_sql)->fetchAll(PDO::FETCH_ASSOC);
                                     </button>
                                     <?php if ($_SESSION['role'] == 'admin'): ?>
                                     <button class="btn-icon" title="Supprimer"
-                                        onclick="deletePayment(<?php echo $payment['id']; ?>, '<?php echo htmlspecialchars($payment['receipt_number']); ?>')">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+    onclick="deletePayment(<?php echo $payment['id']; ?>, '<?php echo htmlspecialchars($payment['receipt_number']); ?>', '<?php echo htmlspecialchars($payment['first_name'] . ' ' . $payment['last_name']); ?>')">
+    <i class="fas fa-trash"></i>
+</button>
                                     <?php endif; ?>
                                 </div>
                             </td>
@@ -1445,18 +1445,142 @@ $recent_payments = $pdo->query($recent_sql)->fetchAll(PDO::FETCH_ASSOC);
     }
 
     // Edit payment
-    function editPayment(paymentId) {
-        // Implement edit functionality
-        alert('Modification du paiement #' + paymentId + ' - Fonctionnalité à implémenter');
+    // Edit payment
+// Fonction pour éditer un paiement
+function editPayment(paymentId) {
+    window.location.href = 'edit_payment.php?id=' + paymentId;
+}
+
+// Fonction pour supprimer un paiement (si vous voulez aussi corriger celle-ci)
+function deletePayment(paymentId, receiptNumber) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer le paiement ' + receiptNumber + 
+                ' ? Cette action est irréversible.')) {
+        window.location.href = 'delete_payment.php?id=' + paymentId;
     }
+}
 
     // Delete payment
-    function deletePayment(paymentId, receiptNumber) {
-        if (confirm('Êtes-vous sûr de vouloir supprimer le paiement ' + receiptNumber +
-                ' ? Cette action est irréversible.')) {
-            window.location.href = 'delete_payment.php?id=' + paymentId;
+    // Delete payment avec modal de confirmation
+function deletePayment(paymentId, receiptNumber, studentName) {
+    // Créer un modal de confirmation personnalisé
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        animation: fadeIn 0.3s ease;
+    `;
+
+    modal.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s ease;
+        ">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="
+                    width: 80px;
+                    height: 80px;
+                    background: #fee2e2;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 20px;
+                ">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444;"></i>
+                </div>
+                <h3 style="font-size: 24px; font-weight: 700; color: #1e293b; margin-bottom: 10px;">
+                    Confirmer la suppression
+                </h3>
+                <p style="color: #64748b; margin-bottom: 10px;">
+                    Êtes-vous sûr de vouloir supprimer le paiement
+                </p>
+                <p style="font-weight: 700; color: #ef4444; font-size: 18px; margin-bottom: 5px;">
+                    ${receiptNumber}
+                </p>
+                <p style="color: #1e293b; font-weight: 500;">
+                    de ${studentName}
+                </p>
+                <p style="color: #64748b; font-size: 14px; margin-top: 15px;">
+                    Cette action est irréversible.
+                </p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="this.closest('div[style*=\\'position: fixed\\']').remove()" 
+                    style="
+                        flex: 1;
+                        padding: 12px;
+                        border: 2px solid #e2e8f0;
+                        background: white;
+                        color: #64748b;
+                        border-radius: 10px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                    "
+                    onmouseover="this.style.backgroundColor='#f8fafc'"
+                    onmouseout="this.style.backgroundColor='white'">
+                    <i class="fas fa-times"></i> Annuler
+                </button>
+                <button onclick="confirmDelete(${paymentId})" 
+                    style="
+                        flex: 1;
+                        padding: 12px;
+                        background: linear-gradient(135deg, #ef4444, #dc2626);
+                        color: white;
+                        border: none;
+                        border-radius: 10px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                        box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+                    "
+                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(239, 68, 68, 0.4)'"
+                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(239, 68, 68, 0.3)'">
+                    <i class="fas fa-trash"></i> Supprimer
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Ajouter les animations CSS
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
-    }
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+function confirmDelete(paymentId) {
+    window.location.href = 'delete_payment.php?id=' + paymentId;
+}
 
     // Create daily chart
     <?php if (!empty($payments)): ?>

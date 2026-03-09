@@ -1447,8 +1447,7 @@ $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
     }
 
     function editStudent(studentId) {
-        // Implement edit functionality
-        alert('Modification de l\'étudiant #' + studentId + ' - Fonctionnalité à implémenter');
+        window.location.href = 'edit_student.php?id=' + studentId;
     }
 
     function deleteStudent(studentId, studentName) {

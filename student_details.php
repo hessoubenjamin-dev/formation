@@ -1223,8 +1223,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_student'])) {
     }
 
     function editPayment(paymentId) {
-        // Implement edit payment functionality
-        alert('Modification du paiement #' + paymentId + ' - Fonctionnalité à implémenter');
+        window.location.href = 'edit_payment.php?id=' + paymentId + '&student_id=<?php echo $student_id; ?>';
     }
 
     function deletePayment(paymentId, receiptNumber) {
