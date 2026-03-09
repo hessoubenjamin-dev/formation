@@ -1446,8 +1446,7 @@ $recent_payments = $pdo->query($recent_sql)->fetchAll(PDO::FETCH_ASSOC);
 
     // Edit payment
     function editPayment(paymentId) {
-        // Implement edit functionality
-        alert('Modification du paiement #' + paymentId + ' - Fonctionnalité à implémenter');
+        window.location.href = 'edit_payment.php?id=' + paymentId;
     }
 
     // Delete payment
